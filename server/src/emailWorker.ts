@@ -1,9 +1,20 @@
 import path from 'node:path';
-import { ImapFlow } from 'imapflow';
+import { ImapFlow, type MessageStructureObject } from 'imapflow';
 import { extractProductsFromText } from './aiExtractor.js';
 import { config, gmailConfigured } from './config.js';
 import { parseAttachment, SUPPORTED_EXTENSIONS } from './parseAttachment.js';
-import { insertMany, validateProduct } from './products.js';
+import { insertMany, validateProduct, type Product } from './products.js';
+
+export interface InboxSummary {
+  emails: number;
+  attachments: number;
+  aiEmails: number;
+  inserted: number;
+  rejectedRows: { subject: string; file: string; row: number; errors: string[] }[];
+  failedEmails: { uid: number; error: string }[];
+}
+
+export type InboxResult = InboxSummary | { skipped: true; reason: string };
 
 let running = false;
 
@@ -13,13 +24,13 @@ let running = false;
  * such an attachment are read by Claude from the email text instead. Finally adds the processed
  * label so the same email is never imported twice.
  */
-export async function processInbox() {
+export async function processInbox(): Promise<InboxResult> {
   if (!gmailConfigured) throw new Error('Set GMAIL_USER and GMAIL_APP_PASSWORD in server/.env');
   if (running) return { skipped: true, reason: 'An email check is already running' };
   running = true;
 
   const { user, appPassword, mailbox, subjectKeyword, processedLabel } = config.gmail;
-  const summary = {
+  const summary: InboxSummary = {
     emails: 0,
     attachments: 0,
     aiEmails: 0,
@@ -31,7 +42,7 @@ export async function processInbox() {
     host: 'imap.gmail.com',
     port: 993,
     secure: true,
-    auth: { user, pass: appPassword },
+    auth: { user: user ?? '', pass: appPassword },
     logger: false,
   });
 
@@ -50,7 +61,7 @@ export async function processInbox() {
           await processMessage(client, uid, summary);
         } catch (err) {
           // Not labelled, so it will be retried on the next run.
-          summary.failedEmails.push({ uid, error: err.message });
+          summary.failedEmails.push({ uid, error: (err as Error).message });
         }
       }
     } finally {
@@ -63,13 +74,14 @@ export async function processInbox() {
   return summary;
 }
 
-async function processMessage(client, uid, summary) {
-  const message = await client.fetchOne(uid, { envelope: true, bodyStructure: true }, { uid: true });
+async function processMessage(client: ImapFlow, uid: number, summary: InboxSummary): Promise<void> {
+  const message = await client.fetchOne(String(uid), { envelope: true, bodyStructure: true }, { uid: true });
+  if (!message) throw new Error('Email not found');
   const subject = message.envelope?.subject ?? '';
-  const products = [];
+  const products: Product[] = [];
 
   // Every source (Excel, JSON or AI) goes through the same validation before saving.
-  const collect = (rows, source) =>
+  const collect = (rows: unknown[], source: string) =>
     rows.forEach((row, index) => {
       const { product, errors } = validateProduct(row);
       if (errors.length) {
@@ -81,7 +93,7 @@ async function processMessage(client, uid, summary) {
 
   const attachments = findAttachments(message.bodyStructure);
   for (const attachment of attachments) {
-    const { content } = await client.download(uid, attachment.part, { uid: true });
+    const { content } = await client.download(String(uid), attachment.part, { uid: true });
     collect(await parseAttachment(attachment.filename, await toBuffer(content)), attachment.filename);
     summary.attachments++;
   }
@@ -96,11 +108,16 @@ async function processMessage(client, uid, summary) {
   }
 
   summary.inserted += await insertMany(products);
-  await client.messageFlagsAdd(uid, [config.gmail.processedLabel], { uid: true, useLabels: true });
+  await client.messageFlagsAdd(String(uid), [config.gmail.processedLabel], { uid: true, useLabels: true });
   summary.emails++;
 }
 
-function findAttachments(node, found = []) {
+interface Attachment {
+  part: string;
+  filename: string;
+}
+
+function findAttachments(node: MessageStructureObject | undefined, found: Attachment[] = []): Attachment[] {
   if (!node) return found;
   const filename = node.dispositionParameters?.filename || node.parameters?.name;
   if (filename && node.part && SUPPORTED_EXTENSIONS.includes(path.extname(filename).toLowerCase())) {
@@ -111,9 +128,13 @@ function findAttachments(node, found = []) {
 }
 
 // Prefers the text/plain part; falls back to text/html with the tags stripped.
-async function downloadBodyText(client, uid, bodyStructure) {
-  const parts = { plain: null, html: null };
-  (function walk(node) {
+async function downloadBodyText(
+  client: ImapFlow,
+  uid: number,
+  bodyStructure: MessageStructureObject | undefined,
+): Promise<string> {
+  const parts: { plain: string | null; html: string | null } = { plain: null, html: null };
+  (function walk(node: MessageStructureObject | undefined) {
     if (!node) return;
     const isAttachment = node.disposition === 'attachment';
     if (!isAttachment && node.type === 'text/plain') parts.plain ??= node.part ?? '1';
@@ -123,7 +144,7 @@ async function downloadBodyText(client, uid, bodyStructure) {
 
   const part = parts.plain ?? parts.html;
   if (!part) return '';
-  const { content } = await client.download(uid, part, { uid: true });
+  const { content } = await client.download(String(uid), part, { uid: true });
   const text = (await toBuffer(content)).toString('utf8');
   if (parts.plain) return text;
   return text
@@ -134,8 +155,9 @@ async function downloadBodyText(client, uid, bodyStructure) {
     .replace(/&amp;/g, '&');
 }
 
-async function toBuffer(stream) {
-  const chunks = [];
+async function toBuffer(stream: AsyncIterable<Buffer> | undefined): Promise<Buffer> {
+  if (!stream) throw new Error('Email part could not be downloaded');
+  const chunks: Buffer[] = [];
   for await (const chunk of stream) chunks.push(chunk);
   return Buffer.concat(chunks);
 }

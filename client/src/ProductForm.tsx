@@ -1,17 +1,35 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
+import type { Product, ProductRow } from './types';
 
-const EMPTY = { name: '', price: '', stock: '', imageUrl: '' };
+// Input fields hold text; it is converted to numbers on save.
+interface FormState {
+  name: string;
+  price: string;
+  stock: string;
+  imageUrl: string;
+}
 
-export default function ProductForm({ product, onSave, onCancel }) {
-  const [form, setForm] = useState(() =>
-    product ? { ...product, imageUrl: product.imageUrl ?? '' } : EMPTY,
+const EMPTY: FormState = { name: '', price: '', stock: '', imageUrl: '' };
+
+interface Props {
+  product: ProductRow | null; // null = new product
+  onSave: (product: Product) => Promise<void>;
+  onCancel: () => void;
+}
+
+export default function ProductForm({ product, onSave, onCancel }: Props) {
+  const [form, setForm] = useState<FormState>(() =>
+    product
+      ? { name: product.name, price: String(product.price), stock: String(product.stock), imageUrl: product.imageUrl ?? '' }
+      : EMPTY,
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const set = (field) => (event) => setForm({ ...form, [field]: event.target.value });
+  const set = (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) =>
+    setForm({ ...form, [field]: event.target.value });
 
-  async function handleSubmit(event) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError('');
@@ -23,7 +41,7 @@ export default function ProductForm({ product, onSave, onCancel }) {
         imageUrl: form.imageUrl.trim() || null,
       });
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
       setSaving(false);
     }
   }
@@ -51,7 +69,7 @@ export default function ProductForm({ product, onSave, onCancel }) {
           Image URL <span className="hint">(optional)</span>
           <input type="url" value={form.imageUrl} onChange={set('imageUrl')} maxLength={255} placeholder="https://…" />
         </label>
-        {form.imageUrl && <img className="preview" src={form.imageUrl} alt="" onError={(e) => (e.target.style.display = 'none')} />}
+        {form.imageUrl && <img className="preview" src={form.imageUrl} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />}
 
         {error && <p className="error">{error}</p>}
 

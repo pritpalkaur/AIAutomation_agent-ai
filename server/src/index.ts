@@ -9,7 +9,7 @@ app.listen(config.port, () => {
 async function checkEmail() {
   try {
     const summary = await processInbox();
-    if (summary.skipped) return;
+    if ('skipped' in summary) return;
     console.log(
       `[email] ${summary.emails} email(s), ${summary.attachments} attachment(s), ` +
         `${summary.aiEmails} read by AI, ` +
@@ -22,7 +22,7 @@ async function checkEmail() {
       console.error(`[email] email uid ${failed.uid} failed: ${failed.error}`);
     }
   } catch (err) {
-    console.error('[email] check failed:', err.message);
+    console.error('[email] check failed:', (err as Error).message);
   }
 }
 

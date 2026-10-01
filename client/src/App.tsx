@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from './api.js';
-import AiImport from './AiImport.jsx';
-import { formatPrice, stockClass } from './format.js';
-import ProductForm from './ProductForm.jsx';
+import { api } from './api';
+import AiImport from './AiImport';
+import { formatPrice, stockClass } from './format';
+import ProductForm from './ProductForm';
+import type { Product, ProductPage, ProductRow } from './types';
 
 const PAGE_SIZE = 20;
 
 export default function App() {
-  const [data, setData] = useState({ items: [], total: 0 });
+  const [data, setData] = useState<Pick<ProductPage, 'items' | 'total'>>({ items: [], total: 0 });
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [editing, setEditing] = useState(null); // null = closed, {} = new, product = edit
+  // null = closed, 'new' = add form, product = edit form
+  const [editing, setEditing] = useState<ProductRow | 'new' | null>(null);
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [showAiImport, setShowAiImport] = useState(false);
@@ -28,7 +30,7 @@ export default function App() {
     try {
       setData(await api.list({ search, page, pageSize: PAGE_SIZE }));
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -39,22 +41,23 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [load]);
 
-  async function handleSave(product) {
-    if (editing.id) await api.update(editing.id, product);
+  async function handleSave(product: Product) {
+    const existing = editing === 'new' ? null : editing;
+    if (existing) await api.update(existing.id, product);
     else await api.create(product);
     setEditing(null);
-    setNotice(editing.id ? 'Product updated.' : 'Product created.');
+    setNotice(existing ? 'Product updated.' : 'Product created.');
     load();
   }
 
-  async function handleDelete(product) {
+  async function handleDelete(product: ProductRow) {
     if (!confirm(`Permanently delete "${product.name}"? This cannot be undone.`)) return;
     try {
       await api.remove(product.id);
       setNotice('Product deleted.');
       load();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   }
 
@@ -64,7 +67,7 @@ export default function App() {
     try {
       const s = await api.checkEmail();
       setNotice(
-        s.skipped
+        'skipped' in s
           ? s.reason
           : `Checked Gmail: ${s.emails} email(s)` +
               (s.aiEmails ? ` (${s.aiEmails} read by AI)` : '') +
@@ -74,7 +77,7 @@ export default function App() {
       );
       load();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setCheckingEmail(false);
     }
@@ -104,7 +107,7 @@ export default function App() {
               ✨ AI import
             </button>
           )}
-          <button onClick={() => setEditing({})}>+ New product</button>
+          <button onClick={() => setEditing('new')}>+ New product</button>
         </div>
       </header>
 
@@ -133,7 +136,7 @@ export default function App() {
                 <td>{p.id}</td>
                 <td className="thumb-cell">
                   {p.imageUrl ? (
-                    <img className="thumb" src={p.imageUrl} alt="" loading="lazy" onError={(e) => (e.target.style.visibility = 'hidden')} />
+                    <img className="thumb" src={p.imageUrl} alt="" loading="lazy" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />
                   ) : (
                     <span className="thumb placeholder">📦</span>
                   )}
@@ -191,7 +194,7 @@ export default function App() {
       )}
 
       {editing && (
-        <ProductForm product={editing.id ? editing : null} onSave={handleSave} onCancel={() => setEditing(null)} />
+        <ProductForm product={editing === 'new' ? null : editing} onSave={handleSave} onCancel={() => setEditing(null)} />
       )}
     </main>
   );

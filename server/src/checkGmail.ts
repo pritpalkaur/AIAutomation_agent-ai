@@ -13,7 +13,7 @@ setTimeout(() => {
   process.exit(1);
 }, 45_000).unref();
 
-const client = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user, pass: pw }, logger: false });
+const client = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user: user ?? '', pass: pw }, logger: false });
 try {
   await client.connect();
   console.log('login: OK');
@@ -23,15 +23,17 @@ try {
     const uids = (await client.search({ gmraw: query }, { uid: true })) || [];
     console.log(`emails waiting to import: ${uids.length}`);
     for (const uid of uids.slice(0, 10)) {
-      const m = await client.fetchOne(uid, { envelope: true }, { uid: true });
-      console.log(`  - ${m.envelope.date?.toISOString().slice(0, 10)}  ${m.envelope.subject}`);
+      const m = await client.fetchOne(String(uid), { envelope: true }, { uid: true });
+      if (!m) continue;
+      console.log(`  - ${m.envelope?.date ? new Date(m.envelope.date).toISOString().slice(0, 10) : ''}  ${m.envelope?.subject}`);
     }
   } finally {
     lock.release();
   }
   await client.logout();
 } catch (err) {
-  console.log(`login/search FAILED: ${err.responseText || err.message}`);
+  const e = err as Error & { responseText?: string };
+  console.log(`login/search FAILED: ${e.responseText || e.message}`);
   process.exit(1);
 }
 process.exit(0);

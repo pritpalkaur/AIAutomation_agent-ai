@@ -28,6 +28,20 @@ const PRODUCTS_SCHEMA = {
   additionalProperties: false,
 };
 
+/** One product as the model returns it, before validation. */
+export interface ExtractedProduct {
+  name: string;
+  price: number | null;
+  stock: number | null;
+  imageUrl: string | null;
+}
+
+export interface ExtractionResult {
+  products: ExtractedProduct[];
+  model: string;
+  usage: { input_tokens: number; output_tokens: number };
+}
+
 const SYSTEM_PROMPT = `You extract product listings from emails into structured records.
 Typical emails are supplier price lists, stock updates and new-product announcements.
 
@@ -48,10 +62,13 @@ Rules:
 
 /**
  * Sends free-form email text to Claude and returns the extracted products (not yet validated).
- * @param {string} text   email body
- * @param {object} meta   { subject } for context
+ * @param text   email body
+ * @param meta   { subject } for context
  */
-export async function extractProductsFromText(text, { subject = '' } = {}) {
+export async function extractProductsFromText(
+  text: string,
+  { subject = '' }: { subject?: string } = {},
+): Promise<ExtractionResult> {
   if (!client) throw new Error('AI extraction is off: set ANTHROPIC_API_KEY in server/.env');
   if (text.length > config.ai.maxInputChars) {
     throw new Error(
@@ -90,7 +107,7 @@ export async function extractProductsFromText(text, { subject = '' } = {}) {
     .filter((block) => block.type === 'text')
     .map((block) => block.text)
     .join('');
-  const { products } = JSON.parse(json);
+  const { products } = JSON.parse(json) as { products: ExtractedProduct[] };
 
   return {
     products,

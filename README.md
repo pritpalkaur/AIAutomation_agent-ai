@@ -108,7 +108,7 @@ flowchart LR
 
 ## 🤖 How the AI extraction works
 
-The code is in [`server/src/aiExtractor.js`](server/src/aiExtractor.js). One email is handled in five steps:
+The code is in [`server/src/aiExtractor.ts`](server/src/aiExtractor.ts). One email is handled in five steps:
 
 ```mermaid
 sequenceDiagram
@@ -178,7 +178,8 @@ becomes:
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Runtime | **Node.js 22** | One language (JavaScript) for the whole project |
+| Runtime | **Node.js 22** | Runs the API and the Gmail worker |
+| Language | **TypeScript** · `tsx` | Type-checked code for both server and web app; `tsx` runs the server directly in development |
 | API | **Express 5** | REST endpoints and error handling |
 | Database | **Microsoft SQL Server** · `mssql` | Stores products; parameterized queries prevent SQL injection |
 | Email | **Gmail IMAP** · `imapflow` | Gmail search and labels, login with an App Password |
@@ -326,6 +327,10 @@ The table has no soft-delete column, so **Delete permanently removes** a product
 
 Base URL: `http://localhost:4000`. The API uses camelCase field names: `id`, `name`, `price`, `stock`, `imageUrl`.
 
+> 🧪 **Swagger UI:** start the server and open **http://localhost:4000/api/docs** to see every endpoint and try it
+> from the browser (**Try it out** → **Execute**). The raw OpenAPI spec is at `/api/openapi.json`.
+> `POST /api/ai/extract` uses the Anthropic API (costs tokens), and `POST /api/email/fetch` really imports from Gmail.
+
 | Method | Endpoint | Description |
 |---|---|---|
 | ![GET](https://img.shields.io/badge/GET-2563eb) | `/api/products?search=&page=1&pageSize=20` | List products, newest first |
@@ -337,6 +342,8 @@ Base URL: `http://localhost:4000`. The API uses camelCase field names: `id`, `na
 | ![POST](https://img.shields.io/badge/POST-16a34a) | `/api/ai/extract` | Body `{ "text": "..." }`: AI extracts and validates products, **without saving** |
 | ![GET](https://img.shields.io/badge/GET-2563eb) | `/api/ai/status` | Whether AI extraction is on, and which model |
 | ![GET](https://img.shields.io/badge/GET-2563eb) | `/api/health` | Health check |
+| ![GET](https://img.shields.io/badge/GET-2563eb) | `/api/docs` | Swagger UI (interactive API docs) |
+| ![GET](https://img.shields.io/badge/GET-2563eb) | `/api/openapi.json` | OpenAPI 3 spec |
 
 <details>
 <summary><b>Example requests and responses</b></summary>
@@ -385,26 +392,29 @@ Invoke-RestMethod -Method Post http://localhost:4000/api/products `
 
 ```
 AIAutomation_agent-ai/
-├── server/                     Node.js API + Gmail worker
+├── server/                     Node.js API + Gmail worker (TypeScript)
 │   ├── src/
-│   │   ├── index.js            Starts the API and the scheduled email check
-│   │   ├── app.js              REST API routes
-│   │   ├── emailWorker.js      Gmail search, attachment/text download, import
-│   │   ├── aiExtractor.js      🤖 Claude prompt, JSON schema and response handling
-│   │   ├── parseAttachment.js  Excel / JSON reader
-│   │   ├── products.js         Validation and SQL queries for dbo.Products
-│   │   ├── db.js               SQL Server connection pool
-│   │   ├── config.js           Settings from .env
-│   │   └── checkGmail.js       Gmail login test (npm run check-gmail)
+│   │   ├── index.ts            Starts the API and the scheduled email check
+│   │   ├── app.ts              REST API routes
+│   │   ├── openapi.ts          OpenAPI spec for Swagger UI (/api/docs)
+│   │   ├── emailWorker.ts      Gmail search, attachment/text download, import
+│   │   ├── aiExtractor.ts      🤖 Claude prompt, JSON schema and response handling
+│   │   ├── parseAttachment.ts  Excel / JSON reader
+│   │   ├── products.ts         Validation and SQL queries for dbo.Products
+│   │   ├── db.ts               SQL Server connection pool
+│   │   ├── config.ts           Settings from .env
+│   │   └── checkGmail.ts       Gmail login test (npm run check-gmail)
 │   ├── samples/                Example attachments for testing
+│   ├── tsconfig.json           TypeScript settings (compiles src/ to dist/)
 │   └── .env.example            Settings template
-└── client/                     React web app
+└── client/                     React web app (TypeScript)
     └── src/
-        ├── App.jsx             Product table, search, paging
-        ├── ProductForm.jsx     Add / edit form
-        ├── AiImport.jsx        ✨ Paste text → AI preview → save
-        ├── format.js           Price and stock display helpers
-        ├── api.js              REST API calls
+        ├── App.tsx             Product table, search, paging
+        ├── ProductForm.tsx     Add / edit form
+        ├── AiImport.tsx        ✨ Paste text → AI preview → save
+        ├── format.ts           Price and stock display helpers
+        ├── api.ts              REST API calls
+        ├── types.ts            Types for the API's JSON (products, AI results, email summary)
         └── styles.css          Styling
 ```
 
@@ -413,10 +423,13 @@ AIAutomation_agent-ai/
 | Folder | Command | What it does |
 |---|---|---|
 | `server` | `npm run dev` | Start the API with auto-restart on code changes |
-| `server` | `npm start` | Start the API |
+| `server` | `npm run build` | Compile the TypeScript in `src/` to JavaScript in `dist/` |
+| `server` | `npm start` | Start the compiled API from `dist/` (run `npm run build` first) |
+| `server` | `npm run typecheck` | Check types without building |
 | `server` | `npm run check-gmail` | Test the Gmail login and list emails waiting to import |
 | `client` | `npm run dev` | Start the web app |
-| `client` | `npm run build` | Build the web app for production |
+| `client` | `npm run build` | Type-check and build the web app for production |
+| `client` | `npm run typecheck` | Check types without building |
 
 ---
 

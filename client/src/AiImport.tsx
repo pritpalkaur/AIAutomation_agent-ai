@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { api } from './api.js';
-import { formatPrice } from './format.js';
+import { api } from './api';
+import { formatPrice } from './format';
+import type { AiExtractResult, Product } from './types';
 
 const SAMPLE = `Hello,
 
@@ -15,9 +16,14 @@ Best regards,
 Sam`;
 
 // Paste free-form text → AI extracts products → review → save only the valid ones.
-export default function AiImport({ onClose, onSaved }) {
+interface Props {
+  onClose: () => void;
+  onSaved: (count: number) => void;
+}
+
+export default function AiImport({ onClose, onSaved }: Props) {
   const [text, setText] = useState('');
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<AiExtractResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,21 +34,23 @@ export default function AiImport({ onClose, onSaved }) {
     try {
       setResult(await api.aiExtract(text));
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   async function save() {
+    if (!result) return;
     const valid = result.products.filter((p) => !p.errors.length);
     setBusy(true);
     setError('');
     try {
-      for (const { errors, ...product } of valid) await api.create(product);
+      // Rows without errors always have a price and stock, so they match Product.
+      for (const { errors, ...product } of valid) await api.create(product as Product);
       onSaved(valid.length);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
       setBusy(false);
     }
   }

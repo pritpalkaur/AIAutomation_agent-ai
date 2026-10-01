@@ -1,7 +1,9 @@
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
+import swaggerUi from 'swagger-ui-express';
 import { extractProductsFromText } from './aiExtractor.js';
 import { config, gmailConfigured } from './config.js';
 import { processInbox } from './emailWorker.js';
+import { openApiSpec } from './openapi.js';
 import {
   createProduct,
   deleteProduct,
@@ -16,22 +18,28 @@ export const app = express();
 app.use(express.json());
 
 class HttpError extends Error {
-  constructor(status, message) {
+  status: number;
+
+  constructor(status: number, message: string) {
     super(message);
     this.status = status;
   }
 }
 
-function parseId(req) {
+function parseId(req: Request): number {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) throw new HttpError(400, 'id must be a positive whole number');
   return id;
 }
 
-const clamp = (value, min, max, fallback) => {
+const clamp = (value: unknown, min: number, max: number, fallback: number): number => {
   const n = Number(value);
   return Number.isInteger(n) ? Math.min(Math.max(n, min), max) : fallback;
 };
+
+// Swagger UI: interactive API docs at http://localhost:4000/api/docs
+app.get('/api/openapi.json', (req, res) => res.json(openApiSpec));
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -91,9 +99,15 @@ app.post('/api/email/fetch', async (req, res) => {
   res.json(await processInbox());
 });
 
-app.use((err, req, res, next) => {
-  if (err instanceof ValidationError) return res.status(400).json({ errors: err.errors });
-  if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof ValidationError) {
+    res.status(400).json({ errors: err.errors });
+    return;
+  }
+  if (err instanceof HttpError) {
+    res.status(err.status).json({ error: err.message });
+    return;
+  }
   console.error(err);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
