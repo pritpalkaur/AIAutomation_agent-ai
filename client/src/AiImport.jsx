@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { api } from './api.js';
+import { formatPrice } from './format.js';
 
-const SAMPLE = `Hi team,
+const SAMPLE = `Hello,
 
-Patient Asha Verma from India called this morning. She has severe pain in her lower back,
-about 8 out of 10, since lifting a heavy box. Taking ibuprofen.
+Here is this week's update from Brightline Supplies:
 
-Also, Liam Carter (Canada) reported mild wrist pain yesterday at 3pm after typing all day.
+- Wireless Mouse (Black) is now $24.99, we have 120 units ready to ship.
+- The USB-C hub 7-in-1 costs 39.50 per unit (35.00 if you order 50+). Only 8 left.
+- Laptop Stand Aluminium: 54.00, currently out of stock.
+  Photo: https://example.com/images/laptop-stand.jpg
 
-Thanks,
-Front desk`;
+Best regards,
+Sam`;
 
-// Paste free-form text → AI extracts records → review → save only the valid ones.
+// Paste free-form text → AI extracts products → review → save only the valid ones.
 export default function AiImport({ onClose, onSaved }) {
   const [text, setText] = useState('');
   const [result, setResult] = useState(null);
@@ -32,11 +35,11 @@ export default function AiImport({ onClose, onSaved }) {
   }
 
   async function save() {
-    const valid = result.records.filter((r) => !r.errors.length);
+    const valid = result.products.filter((p) => !p.errors.length);
     setBusy(true);
     setError('');
     try {
-      for (const { errors, ...record } of valid) await api.create(record);
+      for (const { errors, ...product } of valid) await api.create(product);
       onSaved(valid.length);
     } catch (err) {
       setError(err.message);
@@ -44,15 +47,15 @@ export default function AiImport({ onClose, onSaved }) {
     }
   }
 
-  const validCount = result?.records.filter((r) => !r.errors.length).length ?? 0;
+  const validCount = result?.products.filter((p) => !p.errors.length).length ?? 0;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
         <h2>✨ AI import from text</h2>
         <p className="hint">
-          Paste an email or note. AI finds each pain report and turns it into a record. Nothing is saved
-          until you click Save.
+          Paste an email, such as a supplier price list. AI finds each product and turns it into a record.
+          Nothing is saved until you click Save.
         </p>
 
         <textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste email text here…" />
@@ -71,33 +74,29 @@ export default function AiImport({ onClose, onSaved }) {
         {result && (
           <>
             <p className="hint">
-              Found {result.records.length} record(s), {validCount} valid · model {result.model} ·{' '}
+              Found {result.products.length} product(s), {validCount} valid · model {result.model} ·{' '}
               {result.usage.input_tokens + result.usage.output_tokens} tokens
             </p>
-            {result.records.length > 0 && (
+            {result.products.length > 0 && (
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Patient</th>
-                      <th>Country</th>
-                      <th>Pain</th>
-                      <th>Location</th>
-                      <th>Occurred</th>
-                      <th>Notes</th>
+                      <th>Name</th>
+                      <th className="num">Price</th>
+                      <th className="num">Stock</th>
+                      <th>Image URL</th>
                       <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {result.records.map((r, i) => (
-                      <tr key={i} className={r.errors.length ? 'invalid' : ''}>
-                        <td>{r.patient_name || '—'}</td>
-                        <td>{r.country || '—'}</td>
-                        <td>{r.pain_level}</td>
-                        <td>{r.pain_location}</td>
-                        <td>{r.occurred_at ? new Date(r.occurred_at).toLocaleString() : '—'}</td>
-                        <td className="notes">{r.notes}</td>
-                        <td>{r.errors.length ? `⚠️ ${r.errors.join(', ')}` : '✅ Ready'}</td>
+                    {result.products.map((p, i) => (
+                      <tr key={i} className={p.errors.length ? 'invalid' : ''}>
+                        <td>{p.name || '—'}</td>
+                        <td className="num">{formatPrice(p.price)}</td>
+                        <td className="num">{p.stock ?? '—'}</td>
+                        <td className="url">{p.imageUrl || '—'}</td>
+                        <td>{p.errors.length ? `⚠️ ${p.errors.join(', ')}` : '✅ Ready'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -113,7 +112,7 @@ export default function AiImport({ onClose, onSaved }) {
           </button>
           {result && (
             <button type="button" onClick={save} disabled={busy || validCount === 0}>
-              Save {validCount} record(s)
+              Save {validCount} product(s)
             </button>
           )}
         </div>

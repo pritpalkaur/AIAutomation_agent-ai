@@ -1,10 +1,8 @@
 [
   {
-    "patient_name": "Email Test Three",
-    "country": "UK",
-    "pain_level": 8,
-    "pain_location": "Knee",
-    "occurred_at": "2026-09-30T08:30:00",
-    "notes": "Imported from JSON"
+    "Name": "Mechanical Keyboard",
+    "Price": 89,
+    "Stock": 45,
+    "ImageUrl": "https://example.com/images/keyboard.jpg"
   }
 ]

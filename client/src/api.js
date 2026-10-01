@@ -11,11 +11,10 @@ async function request(path, options = {}) {
 
 export const api = {
   list: ({ search, page, pageSize }) =>
-    request(`/pain-records?${new URLSearchParams({ search, page, pageSize })}`),
-  create: (record) => request('/pain-records', { method: 'POST', body: JSON.stringify(record) }),
-  update: (id, record) =>
-    request(`/pain-records/${id}`, { method: 'PUT', body: JSON.stringify(record) }),
-  remove: (id) => request(`/pain-records/${id}`, { method: 'DELETE' }),
+    request(`/products?${new URLSearchParams({ search, page, pageSize })}`),
+  create: (product) => request('/products', { method: 'POST', body: JSON.stringify(product) }),
+  update: (id, product) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(product) }),
+  remove: (id) => request(`/products/${id}`, { method: 'DELETE' }),
   checkEmail: () => request('/email/fetch', { method: 'POST' }),
   aiStatus: () => request('/ai/status'),
   aiExtract: (text) => request('/ai/extract', { method: 'POST', body: JSON.stringify({ text }) }),

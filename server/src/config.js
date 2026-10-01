@@ -24,7 +24,7 @@ export const config = {
     appPassword: env.GMAIL_APP_PASSWORD?.replace(/\s/g, ''),
     mailbox: env.GMAIL_MAILBOX ?? 'INBOX',
     subjectKeyword: env.EMAIL_SUBJECT_KEYWORD ?? 'data1',
-    processedLabel: env.EMAIL_PROCESSED_LABEL ?? 'pain-processed',
+    processedLabel: env.EMAIL_PROCESSED_LABEL ?? 'products-processed',
     pollMinutes: Number(env.EMAIL_POLL_MINUTES ?? 5),
   },
 

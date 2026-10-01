@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 import AiImport from './AiImport.jsx';
-import RecordForm from './RecordForm.jsx';
+import { formatPrice, stockClass } from './format.js';
+import ProductForm from './ProductForm.jsx';
 
 const PAGE_SIZE = 20;
-
-const formatDate = (value) => (value ? new Date(value).toLocaleString() : '—');
-
-function painClass(level) {
-  if (level >= 7) return 'pain high';
-  if (level >= 4) return 'pain medium';
-  return 'pain low';
-}
 
 export default function App() {
   const [data, setData] = useState({ items: [], total: 0 });
@@ -20,7 +13,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [editing, setEditing] = useState(null); // null = closed, {} = new, record = edit
+  const [editing, setEditing] = useState(null); // null = closed, {} = new, product = edit
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [showAiImport, setShowAiImport] = useState(false);
@@ -46,19 +39,19 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [load]);
 
-  async function handleSave(record) {
-    if (editing.id) await api.update(editing.id, record);
-    else await api.create(record);
+  async function handleSave(product) {
+    if (editing.id) await api.update(editing.id, product);
+    else await api.create(product);
     setEditing(null);
-    setNotice(editing.id ? 'Record updated.' : 'Record created.');
+    setNotice(editing.id ? 'Product updated.' : 'Product created.');
     load();
   }
 
-  async function handleDelete(record) {
-    if (!confirm(`Delete the record for ${record.patient_name}?`)) return;
+  async function handleDelete(product) {
+    if (!confirm(`Permanently delete "${product.name}"? This cannot be undone.`)) return;
     try {
-      await api.remove(record.id);
-      setNotice('Record deleted.');
+      await api.remove(product.id);
+      setNotice('Product deleted.');
       load();
     } catch (err) {
       setError(err.message);
@@ -75,7 +68,7 @@ export default function App() {
           ? s.reason
           : `Checked Gmail: ${s.emails} email(s)` +
               (s.aiEmails ? ` (${s.aiEmails} read by AI)` : '') +
-              `, ${s.inserted} row(s) imported` +
+              `, ${s.inserted} product(s) imported` +
               (s.rejectedRows.length ? `, ${s.rejectedRows.length} row(s) rejected (see server log)` : '') +
               (s.failedEmails.length ? `, ${s.failedEmails.length} email(s) failed` : ''),
       );
@@ -92,11 +85,11 @@ export default function App() {
   return (
     <main>
       <header>
-        <h1>Pain Records</h1>
+        <h1>Products</h1>
         <div className="toolbar">
           <input
             type="search"
-            placeholder="Search name, country or location…"
+            placeholder="Search products…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -111,7 +104,7 @@ export default function App() {
               ✨ AI import
             </button>
           )}
-          <button onClick={() => setEditing({})}>+ New record</button>
+          <button onClick={() => setEditing({})}>+ New product</button>
         </div>
       </header>
 
@@ -127,32 +120,34 @@ export default function App() {
           <thead>
             <tr>
               <th>ID</th>
-              <th>Patient</th>
-              <th>Country</th>
-              <th>Pain</th>
-              <th>Location</th>
-              <th>Occurred</th>
-              <th>Notes</th>
+              <th />
+              <th>Name</th>
+              <th className="num">Price</th>
+              <th className="num">Stock</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {data.items.map((r) => (
-              <tr key={r.id}>
-                <td>{r.id}</td>
-                <td>{r.patient_name}</td>
-                <td>{r.country}</td>
-                <td>
-                  <span className={painClass(r.pain_level)}>{r.pain_level}</span>
+            {data.items.map((p) => (
+              <tr key={p.id}>
+                <td>{p.id}</td>
+                <td className="thumb-cell">
+                  {p.imageUrl ? (
+                    <img className="thumb" src={p.imageUrl} alt="" loading="lazy" onError={(e) => (e.target.style.visibility = 'hidden')} />
+                  ) : (
+                    <span className="thumb placeholder">📦</span>
+                  )}
                 </td>
-                <td>{r.pain_location}</td>
-                <td>{formatDate(r.occurred_at)}</td>
-                <td className="notes">{r.notes}</td>
+                <td>{p.name}</td>
+                <td className="num">{formatPrice(p.price)}</td>
+                <td className="num">
+                  <span className={stockClass(p.stock)}>{p.stock === 0 ? 'Out of stock' : p.stock}</span>
+                </td>
                 <td className="row-actions">
-                  <button className="link" onClick={() => setEditing(r)}>
+                  <button className="link" onClick={() => setEditing(p)}>
                     Edit
                   </button>
-                  <button className="link danger" onClick={() => handleDelete(r)}>
+                  <button className="link danger" onClick={() => handleDelete(p)}>
                     Delete
                   </button>
                 </td>
@@ -160,8 +155,8 @@ export default function App() {
             ))}
             {!loading && data.items.length === 0 && (
               <tr>
-                <td colSpan={8} className="empty">
-                  No records found.
+                <td colSpan={6} className="empty">
+                  No products found.
                 </td>
               </tr>
             )}
@@ -170,7 +165,7 @@ export default function App() {
       </div>
 
       <footer>
-        <span>{data.total} record(s)</span>
+        <span>{data.total} product(s)</span>
         <div className="pager">
           <button className="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>
             ‹ Prev
@@ -189,18 +184,14 @@ export default function App() {
           onClose={() => setShowAiImport(false)}
           onSaved={(count) => {
             setShowAiImport(false);
-            setNotice(`AI import: ${count} record(s) saved.`);
+            setNotice(`AI import: ${count} product(s) saved.`);
             load();
           }}
         />
       )}
 
       {editing && (
-        <RecordForm
-          record={editing.id ? editing : null}
-          onSave={handleSave}
-          onCancel={() => setEditing(null)}
-        />
+        <ProductForm product={editing.id ? editing : null} onSave={handleSave} onCancel={() => setEditing(null)} />
       )}
     </main>
   );

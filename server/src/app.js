@@ -1,16 +1,16 @@
 import express from 'express';
-import { extractRecordsFromText } from './aiExtractor.js';
+import { extractProductsFromText } from './aiExtractor.js';
 import { config, gmailConfigured } from './config.js';
 import { processInbox } from './emailWorker.js';
 import {
-  createRecord,
-  deleteRecord,
-  getRecord,
-  listRecords,
-  updateRecord,
-  validateRecord,
+  createProduct,
+  deleteProduct,
+  getProduct,
+  listProducts,
+  updateProduct,
+  validateProduct,
   ValidationError,
-} from './painRecords.js';
+} from './products.js';
 
 export const app = express();
 app.use(express.json());
@@ -35,9 +35,9 @@ const clamp = (value, min, max, fallback) => {
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-app.get('/api/pain-records', async (req, res) => {
+app.get('/api/products', async (req, res) => {
   res.json(
-    await listRecords({
+    await listProducts({
       search: String(req.query.search ?? ''),
       page: clamp(req.query.page, 1, 100000, 1),
       pageSize: clamp(req.query.pageSize, 1, 200, 20),
@@ -45,42 +45,39 @@ app.get('/api/pain-records', async (req, res) => {
   );
 });
 
-app.get('/api/pain-records/:id', async (req, res) => {
-  const record = await getRecord(parseId(req));
-  if (!record) throw new HttpError(404, 'Record not found');
-  res.json(record);
+app.get('/api/products/:id', async (req, res) => {
+  const product = await getProduct(parseId(req));
+  if (!product) throw new HttpError(404, 'Product not found');
+  res.json(product);
 });
 
-app.post('/api/pain-records', async (req, res) => {
-  res.status(201).json(await createRecord(req.body ?? {}));
+app.post('/api/products', async (req, res) => {
+  res.status(201).json(await createProduct(req.body ?? {}));
 });
 
-app.put('/api/pain-records/:id', async (req, res) => {
-  const record = await updateRecord(parseId(req), req.body ?? {});
-  if (!record) throw new HttpError(404, 'Record not found');
-  res.json(record);
+app.put('/api/products/:id', async (req, res) => {
+  const product = await updateProduct(parseId(req), req.body ?? {});
+  if (!product) throw new HttpError(404, 'Product not found');
+  res.json(product);
 });
 
-app.delete('/api/pain-records/:id', async (req, res) => {
-  if (!(await deleteRecord(parseId(req)))) throw new HttpError(404, 'Record not found');
+app.delete('/api/products/:id', async (req, res) => {
+  if (!(await deleteProduct(parseId(req)))) throw new HttpError(404, 'Product not found');
   res.status(204).end();
 });
 
-// AI preview: extracts records from pasted text and validates them, but does not save anything.
+// AI preview: extracts products from pasted text and validates them, but does not save anything.
 // The web app shows the result so a person can review it before saving.
 app.post('/api/ai/extract', async (req, res) => {
   if (!config.ai.enabled) throw new HttpError(503, 'AI extraction is off: set ANTHROPIC_API_KEY in server/.env');
   const text = String(req.body?.text ?? '');
   if (!text.trim()) throw new HttpError(400, 'text is required');
 
-  const { records, model, usage } = await extractRecordsFromText(text, { sentAt: new Date() });
+  const { products, model, usage } = await extractProductsFromText(text);
   res.json({
     model,
     usage,
-    records: records.map((row) => {
-      const { record, errors } = validateRecord(row);
-      return { ...row, occurred_at: errors.length ? row.occurred_at : record.occurred_at, errors };
-    }),
+    products: products.map((row) => ({ ...row, errors: validateProduct(row).errors })),
   });
 });
 

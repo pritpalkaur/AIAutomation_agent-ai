@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 
 export const SUPPORTED_EXTENSIONS = ['.xlsx', '.json'];
 
-// Returns an array of plain objects whose keys match the PainRecords column names.
+// Returns an array of plain objects, one per row, keyed by the (normalized) column headers.
 export async function parseAttachment(filename, buffer) {
   const ext = path.extname(filename).toLowerCase();
   if (ext === '.xlsx') return parseExcel(buffer);
@@ -11,7 +11,7 @@ export async function parseAttachment(filename, buffer) {
   throw new Error(`Unsupported attachment type: ${filename}`);
 }
 
-// "Patient Name", "patient-name" and "patient_name" all map to patient_name.
+// "Image URL", "image-url" and "image_url" all map to image_url.
 const normalizeKey = (key) => String(key).trim().toLowerCase().replace(/[\s-]+/g, '_');
 
 function normalizeRow(row) {

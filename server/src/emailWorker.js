@@ -1,15 +1,15 @@
 import path from 'node:path';
 import { ImapFlow } from 'imapflow';
-import { extractRecordsFromText } from './aiExtractor.js';
+import { extractProductsFromText } from './aiExtractor.js';
 import { config, gmailConfigured } from './config.js';
 import { parseAttachment, SUPPORTED_EXTENSIONS } from './parseAttachment.js';
-import { insertMany, validateRecord } from './painRecords.js';
+import { insertMany, validateProduct } from './products.js';
 
 let running = false;
 
 /**
  * Finds Gmail messages whose subject contains the keyword and are not yet labelled as processed.
- * Imports every .xlsx/.json attachment into PainRecords. When AI extraction is on, emails without
+ * Imports every .xlsx/.json attachment into dbo.Products. When AI extraction is on, emails without
  * such an attachment are read by Claude from the email text instead. Finally adds the processed
  * label so the same email is never imported twice.
  */
@@ -66,16 +66,16 @@ export async function processInbox() {
 async function processMessage(client, uid, summary) {
   const message = await client.fetchOne(uid, { envelope: true, bodyStructure: true }, { uid: true });
   const subject = message.envelope?.subject ?? '';
-  const records = [];
+  const products = [];
 
   // Every source (Excel, JSON or AI) goes through the same validation before saving.
   const collect = (rows, source) =>
     rows.forEach((row, index) => {
-      const { record, errors } = validateRecord(row);
+      const { product, errors } = validateProduct(row);
       if (errors.length) {
         summary.rejectedRows.push({ subject, file: source, row: index + 1, errors });
       } else {
-        records.push(record);
+        products.push(product);
       }
     });
 
@@ -89,16 +89,13 @@ async function processMessage(client, uid, summary) {
   if (!attachments.length && config.ai.enabled) {
     const text = await downloadBodyText(client, uid, message.bodyStructure);
     if (text.trim()) {
-      const { records: aiRows } = await extractRecordsFromText(text, {
-        subject,
-        sentAt: message.envelope?.date ?? new Date(),
-      });
+      const { products: aiRows } = await extractProductsFromText(text, { subject });
       collect(aiRows, 'email text (AI)');
       summary.aiEmails++;
     }
   }
 
-  summary.inserted += await insertMany(records);
+  summary.inserted += await insertMany(products);
   await client.messageFlagsAdd(uid, [config.gmail.processedLabel], { uid: true, useLabels: true });
   summary.emails++;
 }
