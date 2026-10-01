@@ -1,0 +1,20 @@
+{
+  "name": "pain-records-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "check-gmail": "node src/checkGmail.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "dotenv": "^18.0.4",
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "imapflow": "^2.1.2",
+    "mssql": "^12.7.2"
+  }
+}
